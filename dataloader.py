@@ -18,6 +18,22 @@ d2_test = ['d2_03_03_2020', 'd2_02_10_2021', 'd2_02_03_2021_2']
 
 
 def get_splits(path='./dataset/labels.pkl', dataset='d1', split='train'):
+    """Splits a dataset into training, validation, and testing sets.
+
+    Args:
+        path (str): Path to the dataset labels file in pickle format.
+            Defaults to './dataset/labels.pkl'.
+        dataset (str): Name of the dataset to split. Must be either 'd1' or 'd2'.
+            Defaults to 'd1'.
+        split (str): Type of split to return. Must be either None, 'train', 'val', or 'test'.
+            If None, returns a dictionary containing all splits.
+            Defaults to 'train'.
+
+    Returns:
+        DataFrame or Dict: If split is None, returns a dictionary containing all splits,
+            where the keys are 'train', 'val', and 'test' and the values are DataFrames.
+            Otherwise, returns the split specified by the split argument as a DataFrame.
+    """
     assert dataset in ['d1', 'd2'], "dataset must be either 'd1' or 'd2'"
     assert split in [None, 'train', 'val', 'test'], "split must be in [None, 'train', 'val', 'test']"
     if dataset == 'd1':
@@ -37,6 +53,20 @@ def get_splits(path='./dataset/labels.pkl', dataset='d1', split='train'):
 
 
 def preprocess(path, xy, cfg, bbox_to_gt_func, split='train', return_xy=False):
+    """Preprocesses an image and its associated bounding boxes for training or evaluation.
+
+    Args:
+        path (str): The path to the image file.
+        xy (numpy.ndarray): The bounding box coordinates for the image, as a numpy array with shape (N, 4).
+        cfg (Config): The configuration object for the training or evaluation run.
+        bbox_to_gt_func (function): A function that converts bounding boxes to ground truth targets.
+        split (str, optional): The dataset split being processed. Must be one of 'train', 'val', or 'test'. Defaults to 'train'.
+        return_xy (bool, optional): Whether to return the bounding box coordinates as well as the image. Defaults to False.
+
+    Returns:
+        If `return_xy` is False, a tuple containing the preprocessed image and its ground truth targets.
+        If `return_xy` is True, a tuple containing the preprocessed image and its bounding box coordinates.
+    """
     path = path.numpy().decode('utf-8')
     xy = xy.numpy()
 
@@ -109,6 +139,21 @@ def preprocess(path, xy, cfg, bbox_to_gt_func, split='train', return_xy=False):
 
 
 def align_board(img, xy):
+    """Rotate and align the dartboard image to make it horizontal.
+
+    Args:
+        img (numpy.ndarray): The input image of the dartboard.
+        xy (numpy.ndarray): An array of shape (20, 2) representing the 20 calibration points of the dartboard.
+
+    Returns:
+        Tuple of:
+            - img (numpy.ndarray): The rotated image of the dartboard.
+            - xy (numpy.ndarray): The updated calibration points after the rotation.
+
+    The function first calculates the center of the dartboard by taking the mean of the first four calibration points. Then it calculates the angle between the center point and the top calibration point of the dartboard, and rotates the image and calibration points by this angle to make the dartboard horizontal.
+
+    Note that the function performs rotation on all the calibration points (darts_only=False) and returns the updated calibration points.
+    """
     center = np.mean(xy[:4, :2], axis=0)
     angle = 9 - np.arctan((center[0] - xy[0, 0]) / (center[1] - xy[0, 1])) / np.pi * 180
     img, xy = rotate(img, xy, angle, darts_only=False)
@@ -116,6 +161,19 @@ def align_board(img, xy):
 
 
 def rotate(img, xy, angle, darts_only=True):
+    """Rotates the given image and corresponding bounding boxes around their center.
+
+    Args:
+    - img (numpy.ndarray): Image data to be rotated.
+    - xy (numpy.ndarray): The bounding boxes, where each row is a coordinate of a point in the format x, y, visibility.
+    - angle (float): The angle of rotation in degrees.
+    - darts_only (bool): Whether to rotate only the darts in the image (xy[4:] points) or all the bounding boxes (default=True).
+    
+    Returns:
+    - A tuple containing:
+        - img (numpy.ndarray): The rotated image.
+        - xy (numpy.ndarray): The rotated bounding boxes.
+    """
     h, w = img.shape[:2]
     center = np.mean(xy[:4, :2], axis=0)
     M = cv2.getRotationMatrix2D((center[0]*w, center[1]*h), angle, 1)
@@ -139,6 +197,24 @@ def rotate(img, xy, angle, darts_only=True):
 
 
 def flip(img, xy, direction, darts_only=True):
+    """Flip the input image and coordinates either left-right or up-down.
+
+    Args:
+        img (np.array): The input image as an array of shape `(h, w, c)`.
+        xy (np.array): The coordinates of the dartboard as an array of shape `(n, 4)`.
+            The first 4 coordinates are the corners of the dartboard and the rest are
+            the darts' locations. Each row has the format `(x, y, visibility, presence)`
+            where `visibility` is a binary value indicating if the dart is visible or not
+            and `presence` is a binary value indicating if the dart is present or not.
+        direction (str): The direction to flip the image and coordinates. Either 'lr'
+            to flip left-right or 'ud' to flip up-down.
+        darts_only (bool): Whether to flip only the darts' coordinates or the whole board.
+
+    Returns:
+        Tuple[np.array, np.array]: A tuple containing the flipped image as an array of shape
+            `(h, w, c)` and the flipped coordinates of the dartboard as an array of shape `(n, 4)`.
+
+    """
     if direction == 'lr':
         img = img[:, ::-1, :]  # flip left-right
         axis = 0
@@ -164,6 +240,21 @@ def flip(img, xy, direction, darts_only=True):
 
 
 def translate(img, xy, tx, ty):
+    """Translate the image and the dartboard coordinates.
+
+    Args:
+        img: numpy array of shape (height, width, 3), representing an image.
+        xy: numpy array of shape (N, 4), representing the coordinates of the dartboard
+            and darts on the image. The first 4 coordinates correspond to the four corners
+            of the dartboard, and the remaining coordinates correspond to the darts.
+        tx: float, representing the distance to translate the image horizontally.
+        ty: float, representing the distance to translate the image vertically.
+
+    Returns:
+        A tuple containing:
+            img: numpy array of shape (height, width, 3), the translated image.
+            xy: numpy array of shape (N, 4), the translated dartboard coordinates.
+    """
     h, w = img.shape[:2]
     M = np.array([[1, 0, tx], [0, 1, ty]], dtype=np.float32)
     img = cv2.warpAffine(img, M, (w, h))
@@ -173,6 +264,17 @@ def translate(img, xy, tx, ty):
 
 
 def warp_perspective(img, xy, rho):
+    """Apply a random perspective transform to an image and its corresponding points.
+
+    Args:
+        img (numpy.ndarray): The image to be transformed.
+        xy (numpy.ndarray): The points to be transformed.
+        rho (float): The maximum amount of distortion allowed.
+
+    Returns:
+        numpy.ndarray: The transformed image.
+        numpy.ndarray: The transformed points.
+    """
     patch_size = 128
     top_point = (32,32)
     left_point = (patch_size+32, 32)
@@ -206,6 +308,19 @@ def warp_perspective(img, xy, rho):
 
 
 def get_bounding_boxes(xy, size):
+    """
+    Returns the bounding boxes for a given array of 2D coordinates and a size.
+    
+    Args:
+        xy:     A numpy array of shape (N, 3) where N is the number of 2D coordinates.
+                The third column indicates the visibility of the point.
+        size:   An integer indicating the size of the bounding box.
+    
+    Returns:
+        xywhc:  A numpy array of shape (M, 5) where M is the number of visible points in the input array.
+                The first four columns contain the bounding box coordinates (x, y, width, height).
+                The last column contains the class label of the point (1 to 4 for the first four points, 0 for others).
+    """
     xy[((xy[:, 0] - size / 2 <= 0) |
         (xy[:, 0] + size / 2 >= 1) |
         (xy[:, 1] - size / 2 <= 0) |
@@ -223,6 +338,22 @@ def get_bounding_boxes(xy, size):
 
 
 def set_shapes(img, gt1, gt2, gt3, input_size):
+    """
+    Sets the shapes of the input image and ground truth tensors.
+
+    Args:
+        img (tf.Tensor): Input image tensor.
+        gt1 (tf.Tensor): Ground truth tensor at scale 1/8.
+        gt2 (tf.Tensor): Ground truth tensor at scale 1/16.
+        gt3 (tf.Tensor): Ground truth tensor at scale 1/32.
+        input_size (int): Desired size of the input image.
+
+    Returns:
+        img (tf.Tensor): Input image tensor with the desired shape.
+        gt1 (tf.Tensor): Ground truth tensor at scale 1/8 with the desired shape.
+        gt2 (tf.Tensor): Ground truth tensor at scale 1/16 with the desired shape.
+        gt3 (tf.Tensor): Ground truth tensor at scale 1/32 with the desired shape.
+    """
     img.set_shape([input_size, input_size, 3])
     gt1.set_shape([input_size // 8, input_size // 8, 3, 10])
     gt2.set_shape([input_size // 16, input_size // 16, 3, 10])
@@ -231,6 +362,29 @@ def set_shapes(img, gt1, gt2, gt3, input_size):
 
 
 def set_shapes_tiny(img, gt1, gt2, input_size):
+    """
+    Resizes the given image and ground truth tensors to their expected shapes for a Tiny YOLOv3 network.
+
+    Args:
+        img: A tensor representing the input image with shape [H, W, C], where H, W are the height and width of the
+            image in pixels, and C is the number of channels.
+        gt1: A tensor representing the ground truth labels for the output feature map of size 1/16 of the input image.
+            The tensor has shape [H/16, W/16, 3, 10], where H and W are the height and width of the input image in
+            pixels, 3 is the number of anchor boxes at each cell in the feature map, and 10 is the number of elements
+            in each label (4 for the bounding box coordinates, 1 for the objectness score, and 5 for the class
+            probabilities).
+        gt2: A tensor representing the ground truth labels for the output feature map of size 1/32 of the input image.
+            The tensor has shape [H/32, W/32, 3, 10], where H and W are the height and width of the input image in
+            pixels, 3 is the number of anchor boxes at each cell in the feature map, and 10 is the number of elements
+            in each label (4 for the bounding box coordinates, 1 for the objectness score, and 5 for the class
+            probabilities).
+        input_size: An integer representing the expected input size of the image in pixels. This is the size that the
+            image will be resized to in order to be fed into the Tiny YOLOv3 network.
+
+    Returns:
+        A tuple containing the resized image tensor and the ground truth tensors with their shapes set to the expected
+        values for the Tiny YOLOv3 network.
+    """
     img.set_shape([input_size, input_size, 3])
     gt1.set_shape([input_size // 16, input_size // 16, 3, 10])
     gt2.set_shape([input_size // 32, input_size // 32, 3, 10])
@@ -244,6 +398,20 @@ def load_tfds(
         return_xy=False,
         batch_size=32,
         debug=False):
+    """
+    Loads a TensorFlow dataset from a given configuration.
+
+    Args:
+        cfg: A configuration object that contains settings for loading the dataset.
+        bbox_to_gt_func: A function that maps bounding boxes to ground truth data.
+        split: The split to use for loading data (e.g. 'train', 'val', or 'test').
+        return_xy: Whether to return image data with bounding boxes in the output.
+        batch_size: The batch size to use when loading data.
+        debug: Whether to run in debug mode (slower, but useful for debugging).
+
+    Returns:
+        A TensorFlow dataset object containing image data and ground truth data.
+    """
 
     data = get_splits(cfg.data.labels_path, cfg.data.dataset, split)
     img_path = osp.join(cfg.data.path, 'cropped_images', str(cfg.model.input_size))

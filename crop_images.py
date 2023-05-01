@@ -7,7 +7,16 @@ import cv2
 import pandas as pd
 
 
-def crop(img_path, write_path, bbox, size=480, overwrite=False):
+def crop(img_path: str, write_path: str, bbox: tuple, size: int = 480, overwrite: bool = False) -> None:
+    """Crops an image and saves the cropped image to disk.
+
+    Args:
+        img_path (str): Path to the input image.
+        write_path (str): Path to save the cropped image.
+        bbox (tuple): Tuple containing (xmin, ymin, xmax, ymax) coordinates of the bounding box.
+        size (int, optional): Size to resize the cropped image. Defaults to 480.
+        overwrite (bool, optional): Whether to overwrite existing files with the same name. Defaults to False.
+    """
     if osp.exists(write_path) and not overwrite:
         print(write_path, 'already exists')
         return
@@ -22,9 +31,9 @@ def crop(img_path, write_path, bbox, size=480, overwrite=False):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-lp', '--labels-path', default='dataset/labels.pkl')
-    parser.add_argument('-ip', '--image-path', default='dataset/images')
-    parser.add_argument('-s', '--size', nargs='+', default=['480'])
+    parser.add_argument('-lp', '--labels-path', default='dataset/labels.pkl', help='Path to the labels file.')
+    parser.add_argument('-ip', '--image-path', default='dataset/images', help='Path to the images folder.')
+    parser.add_argument('-s', '--size', nargs='+', default=['480'], help='Size(s) to crop the images to.')
     args = parser.parse_args()
 
     for size in args.size:
@@ -46,15 +55,3 @@ if __name__ == '__main__':
 
         p = mp.Pool(mp.cpu_count())
         p.starmap(crop, list(zip(img_paths, write_paths, bboxes, sizes)))
-
-
-
-
-
-
-
-
-
-
-
-

@@ -6,10 +6,51 @@ from tensorflow.keras.losses import BinaryCrossentropy, Loss, Reduction
 
 class YOLOv4Loss(Loss):
     """
+    YOLOv4Loss is a loss function implementation for training YOLOv4 object detection models.
     Patched version of loss to fix potential nan with conf_loss
-    """
 
+    Parameters:
+    -----------
+    batch_size : int
+        The batch size used for training the model.
+    iou_type : str
+        The type of IoU (Intersection over Union) loss to use. Possible values are "iou", "giou", and "ciou".
+    verbose : int, default=0
+        Verbosity mode (0 = silent, 1 = verbose)
+
+    Attributes:
+    -----------
+    while_cond : function
+        Lambda function used in the TensorFlow while_loop() function.
+    prob_binaryCrossentropy : BinaryCrossentropy object
+        Object used to calculate the binary cross-entropy loss.
+
+    Methods:
+    --------
+    call(y_true, y_pred):
+        Calculates the loss between the ground truth and predicted values.
+
+    """
     def __init__(self, batch_size, iou_type, verbose=0):
+        """
+        Initializes an instance of the YOLOv4Loss class.
+
+        Args:
+            batch_size (int): The number of examples in each batch.
+            iou_type (str): The type of IoU (Intersection over Union) metric to use for bounding boxes.
+                Must be one of "iou", "giou", or "ciou".
+            verbose (int, optional): The verbosity level. Set to 0 by default.
+
+        Attributes:
+            batch_size (int): The number of examples in each batch.
+            bbox_xiou (callable): The IoU metric to use for bounding boxes, based on the specified iou_type.
+            verbose (int): The verbosity level.
+            while_cond (callable): A lambda function used to control the while loop in the call method.
+            prob_binaryCrossentropy (BinaryCrossentropy): A BinaryCrossentropy object with reduction set to NONE.
+
+        Raises:
+            ValueError: If iou_type is not one of "iou", "giou", or "ciou".
+        """
         super(YOLOv4Loss, self).__init__(name="YOLOv4Loss")
         self.batch_size = batch_size
         if iou_type == "iou":
@@ -29,10 +70,29 @@ class YOLOv4Loss(Loss):
 
     def call(self, y_true, y_pred):
         """
-        @param `y_true`: Dim(batch, g_height, g_width, 3,
-                                (b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...))
-        @param `y_pred`: Dim(batch, g_height, g_width, 3,
-                                (b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...))
+        Calculates the total loss for the YOLOv3 model, which is the sum of IoU loss,
+        confidence loss, and probabilities loss. This function is used as a callback during
+        model training.
+
+        Args:
+            y_true (tensor): Ground truth tensor of shape (batch, g_height, g_width, 3,
+                (b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...)). Here, `batch` is the
+                batch size, `g_height` and `g_width` are the height and width of the
+                grid used to divide the image, `3` represents the number of bounding boxes
+                predicted per grid cell, and `(b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...)`
+                represents the ground truth values for the bounding box center coordinates,
+                width and height, confidence score, and probability scores for each class.
+            y_pred (tensor): Predicted tensor of shape (batch, g_height, g_width, 3,
+                (b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...)). Here, `batch` is the
+                batch size, `g_height` and `g_width` are the height and width of the
+                grid used to divide the image, `3` represents the number of bounding boxes
+                predicted per grid cell, and `(b_x, b_y, b_w, b_h, conf, prob_0, prob_1, ...)`
+                represents the predicted values for the bounding box center coordinates,
+                width and height, confidence score, and probability scores for each class.
+
+        Returns:
+            tensor: Total loss tensor, which is the sum of IoU loss, confidence loss,
+                and probabilities loss.
         """
         if len(y_pred.shape) == 4:
             _, g_height, g_width, box_size = y_pred.shape
@@ -192,13 +252,21 @@ def bbox_iou(bboxes1, bboxes2):
 
 def bbox_giou(bboxes1, bboxes2):
     """
-    Generalized IoU
-    @param bboxes1: (a, b, ..., 4)
-    @param bboxes2: (A, B, ..., 4)
-        x:X is 1:n or n:n or n:1
-    @return (max(a,A), max(b,B), ...)
-    ex) (4,):(3,4) -> (3,)
-        (2,1,4):(2,3,4) -> (2,3)
+    Calculates the intersection over union (IoU) between two sets of bounding boxes.
+
+    Args:
+        bboxes1: A tensor of shape (a, b, ..., 4), representing the coordinates of `a x b x ...` bounding boxes. 
+            The last dimension has four elements, which correspond to the x and y coordinates of the top-left corner of the box, and its width and height.
+        bboxes2: A tensor of shape (A, B, ..., 4), representing the coordinates of `A x B x ...` bounding boxes.
+
+    Returns:
+        A tensor of shape (max(a, A), max(b, B), ...), representing the IoU between each pair of bounding boxes. 
+            For example, if bboxes1 has shape (4,) and bboxes2 has shape (3, 4), the returned tensor will have shape (3,).
+
+    Examples:
+        - If bboxes1 has shape (2, 1, 4) and bboxes2 has shape (2, 3, 4), the returned tensor will have shape (2, 3).
+        - If bboxes1 has shape (4,) and bboxes2 has shape (3, 4), the returned tensor will have shape (3,).
+
     """
     bboxes1_area = bboxes1[..., 2] * bboxes1[..., 3]
     bboxes2_area = bboxes2[..., 2] * bboxes2[..., 3]
@@ -244,12 +312,25 @@ def bbox_giou(bboxes1, bboxes2):
 def bbox_ciou(bboxes1, bboxes2):
     """
     Complete IoU
-    @param bboxes1: (a, b, ..., 4)
-    @param bboxes2: (A, B, ..., 4)
-        x:X is 1:n or n:n or n:1
-    @return (max(a,A), max(b,B), ...)
-    ex) (4,):(3,4) -> (3,)
-        (2,1,4):(2,3,4) -> (2,3)
+    
+    Args:
+        bboxes1: A tensor of shape (a, b, ..., 4) containing bounding box coordinates of the first set of boxes
+        bboxes2: A tensor of shape (A, B, ..., 4) containing bounding box coordinates of the second set of boxes
+            where x:X is 1:n or n:n or n:1
+            
+    Returs:: 
+        A tensor of shape (max(a,A), max(b,B), ...) containing the complete IoU for each pair of boxes in bboxes1 and bboxes2
+            where ex) (4,):(3,4) -> (3,), (2,1,4):(2,3,4) -> (2,3)
+
+    Computes the complete intersection over union (IoU) between two sets of bounding boxes. The complete IoU includes a distance metric in addition to the area of intersection and area of union, which helps better account for the overlap between the boxes. The input tensors bboxes1 and bboxes2 should contain the same number of dimensions, with the last dimension having size 4 representing the (x, y, width, height) of each box. 
+
+    The output tensor is computed as follows: 
+        1. Compute the area of each box in bboxes1 and bboxes2
+        2. Compute the coordinates of the top-left and bottom-right corners of each box in bboxes1 and bboxes2
+        3. Compute the coordinates of the intersection of each box pair, along with the area of intersection
+        4. Compute the area of union for each box pair
+        5. Compute the intersection over union (IoU) for each box pair
+        6. Compute the complete IoU by including a distance metric in the calculation, which helps to account for the overlap between the boxes
     """
     bboxes1_area = bboxes1[..., 2] * bboxes1[..., 3]
     bboxes2_area = bboxes2[..., 2] * bboxes2[..., 3]

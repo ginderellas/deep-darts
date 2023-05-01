@@ -1,6 +1,6 @@
 import os
 import os.path as osp
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
 import tensorflow as tf
 from yacs.config import CfgNode as CN
 from dataloader import load_tfds
@@ -11,6 +11,9 @@ import pickle
 from tensorflow.keras import layers
 import random
 from predict import predict
+
+# Set environment variable to ignore TensorFlow warnings
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 gpus = tf.config.list_physical_devices('GPU')
 for gpu in gpus:
@@ -27,7 +30,22 @@ def make_model(
         activation1: str = "leaky",
         kernel_regularizer=tf.keras.regularizers.l2(0.0005),
 ):
-    """Use this function instead of yolo.make_model()"""
+    """
+    Build the YOLOv4 model. Use this function instead of yolo.make_model()
+
+    Args:
+        yolo (YOLOv4): A YOLOv4 object to build the model with.
+        activation0 (str): The name of the activation function to use for the
+            first block of layers. Default is "mish".
+        activation1 (str): The name of the activation function to use for the
+            second block of layers. Default is "leaky".
+        kernel_regularizer (tf.keras.regularizers.Regularizer): The regularizer
+            to use for the model's kernel weights. Default is L2 regularization
+            with a factor of 0.0005.
+
+    Returns:
+        None
+    """
     yolo._has_weights = False
     # height, width, channels
     inputs = layers.Input([yolo.input_size[1], yolo.input_size[0], 3])
@@ -52,6 +70,16 @@ def make_model(
 
 
 def build_model(cfg, classes='classes'):
+    """
+    Build a YOLOv4 model based on the specified configuration.
+
+    Args:
+        cfg (CfgNode): A YACS CfgNode object containing the model's configuration.
+        classes (str): The name of the file containing the class names. Default is "classes".
+
+    Returns:
+        A YOLOv4 object representing the built model.
+    """
     yolo = YOLOv4(tiny=cfg.model.tiny)
     yolo.classes = classes
     yolo.input_size = (cfg.model.input_size, cfg.model.input_size)
@@ -61,6 +89,16 @@ def build_model(cfg, classes='classes'):
 
 
 def train(cfg, strategy):
+    """
+    Train a YOLOv4 model based on the specified configuration.
+
+    Args:
+        cfg (CfgNode): A YACS CfgNode object containing the model's configuration.
+        strategy (tf.distribute.Strategy): The TensorFlow distribution strategy to use for training.
+
+    Returns:
+        A YOLOv4 object representing the trained model.
+    """
     img_path = osp.join(cfg.data.path, 'cropped_images', str(cfg.model.input_size))
     assert osp.exists(img_path), 'Could not find cropped images at {}'.format(img_path)
 

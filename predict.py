@@ -11,6 +11,22 @@ import pickle
 
 
 def bboxes_to_xy(bboxes, max_darts=3):
+    """
+    This function converts bounding boxes to a set of (x, y) coordinates for darts and calibration points.
+
+    Args:
+        bboxes (numpy array): A numpy array of shape (n, 5), where n is the number of bounding boxes.
+            Each bounding box is represented by a row in the array, where the first four columns
+            represent the x and y coordinates of the top-left and bottom-right corners of the bounding box
+            and the last column represents the class of the bounding box (0 for darts and 1-4 for calibration points).
+        max_darts (int): The maximum number of darts to include in the output. Defaults to 3.
+
+    Returns:
+        xy (numpy array): A numpy array of shape (4 + max_darts, 3) representing the (x, y) coordinates of the
+            darts and calibration points. The first four rows represent the calibration points, and the remaining
+            rows represent the darts. The first two columns represent the (x, y) coordinates, and the last column
+            is a binary value indicating whether the point has been estimated (1) or not (0).
+    """
     xy = np.zeros((4 + max_darts, 3), dtype=np.float32)
     for cls in range(5):
         if cls == 0:
@@ -29,6 +45,20 @@ def bboxes_to_xy(bboxes, max_darts=3):
 
 
 def est_cal_pts(xy):
+    """
+    This function estimates the missing calibration points in a 3x4 numpy array xy, 
+    which represents a set of four 3D points in homogeneous coordinates.
+    
+    Args:
+        xy: a 3x4 numpy array of 3D points in homogeneous coordinates, 
+            where each row represents x, y, and z coordinates, respectively. 
+            The last column indicates whether a point is missing (0) or not (1).
+          
+    Returns:
+        xy: a 3x4 numpy array of 3D points in homogeneous coordinates, 
+            where missing calibration points are estimated based on the other three points.
+            If there are more than one missing points, the function prints an error message.
+    """
     missing_idx = np.where(xy[:4, -1] == 0)[0]
     if len(missing_idx) == 1:
         if missing_idx[0] <= 1:
@@ -69,7 +99,21 @@ def predict(
         split='val',
         max_darts=3,
         write=False):
+    """
+    Perform predictions on a dataset of images using a YOLO object detection model.
 
+    Args:
+        yolo (YoloV3): A YOLO object detection model.
+        cfg (Config): A configuration object.
+        labels_path (str): Path to the labels file. Defaults to './dataset/labels.pkl'.
+        dataset (str): The name of the dataset to use. Defaults to 'd1'.
+        split (str): The name of the split to use. Defaults to 'val'.
+        max_darts (int): The maximum number of darts to predict. Defaults to 3.
+        write (bool): Whether to write images with predictions overlaid. Defaults to False.
+
+    Returns:
+        results (dict): A dictionary containing the results of the predictions.
+    """
     np.random.seed(0)
 
     write_dir = osp.join('./models', cfg.model.name, 'preds', split)

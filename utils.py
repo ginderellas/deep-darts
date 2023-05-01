@@ -1,7 +1,32 @@
+"""
+This module provides the function to detect the hardware environment and set up the appropriate
+TensorFlow distribution strategy.
+
+Functions
+---------
+detect_hardware(tpu_name):
+    Detects the hardware environment and sets up the appropriate TensorFlow distribution strategy.
+    Returns the TPUClusterResolver and the distribution strategy objects.
+"""
 import tensorflow as tf
 
 
 def detect_hardware(tpu_name):
+    """
+    Detects the hardware environment and sets up the appropriate TensorFlow distribution strategy.
+
+    Parameters
+    ----------
+    tpu_name : str
+        The name of the TPU to use (if available). If not provided, the function will run on CPU or GPU.
+
+    Returns
+    -------
+    tpu : TPUClusterResolver
+        The TPUClusterResolver object if the hardware environment is TPU, else None.
+    strategy : tf.distribute.Strategy
+        The appropriate TensorFlow distribution strategy based on the hardware environment.
+    """
     try:
         tpu = tf.distribute.cluster_resolver.TPUClusterResolver(tpu=tpu_name)  # TPU detection
     except ValueError:
